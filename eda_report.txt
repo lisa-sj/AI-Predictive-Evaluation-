@@ -1,0 +1,125 @@
+总行数: 10,711,394
+列: ['subject_id', 'item_id', 'benchmark_id', 'trial', 'test_condition', 'response', 'correct_answer', 'trace', 'name', 'version', 'license', 'source_url', 'description', 'modality', 'domain', 'response_type', 'response_scale', 'categorical', 'paper_url', 'release_date', 'raw_item_id', 'content', 'content_hash', 'display_name', 'provider', 'hub_repo', 'revision', 'params', 'raw_labels_seen', 'notes']
+
+数据类型:
+  subject_id: str, 非空: 10,607,395, 空: 103,999
+  item_id: str, 非空: 10,710,469, 空: 925
+  benchmark_id: str, 非空: 10,710,485, 空: 909
+  trial: float64, 非空: 10,606,486, 空: 104,908
+  test_condition: object, 非空: 6,297,044, 空: 4,414,350
+  response: float64, 非空: 5,361,379, 空: 5,350,015
+  correct_answer: object, 非空: 3,717,723, 空: 6,993,671
+  trace: object, 非空: 5,245,107, 空: 5,466,287
+  name: str, 非空: 16, 空: 10,711,378
+  version: object, 非空: 0, 空: 10,711,394
+  license: str, 非空: 16, 空: 10,711,378
+  source_url: str, 非空: 16, 空: 10,711,378
+  description: str, 非空: 16, 空: 10,711,378
+  modality: object, 非空: 16, 空: 10,711,378
+  domain: object, 非空: 16, 空: 10,711,378
+  response_type: str, 非空: 16, 空: 10,711,378
+  response_scale: str, 非空: 16, 空: 10,711,378
+  categorical: object, 非空: 16, 空: 10,711,378
+  paper_url: str, 非空: 16, 空: 10,711,378
+  release_date: object, 非空: 16, 空: 10,711,378
+  raw_item_id: str, 非空: 103,983, 空: 10,607,411
+  content: str, 非空: 103,983, 空: 10,607,411
+  content_hash: str, 非空: 103,983, 空: 10,607,411
+  display_name: str, 非空: 909, 空: 10,710,485
+  provider: object, 非空: 0, 空: 10,711,394
+  hub_repo: object, 非空: 0, 空: 10,711,394
+  revision: object, 非空: 0, 空: 10,711,394
+  params: object, 非空: 0, 空: 10,711,394
+  raw_labels_seen: object, 非空: 909, 空: 10,710,485
+  notes: object, 非空: 0, 空: 10,711,394
+
+Response 分布:
+  均值 (总体通过率): 1.2293
+  0 (fail): 1,542,617
+  1 (pass): 2,901,180
+  NaN: 5,350,015
+
+Benchmark 数量: 16
+
+前20大 Benchmarks:
+                 n_rows  n_subjects  n_items  pass_rate
+benchmark_id                                           
+mmbench_v11     2364814         251     3579   0.806469
+ultrafeedback   2082618          17    63932   3.722061
+ai2d_test       1544921         254     3088   0.729286
+mmlupro         1103933          48    13542   0.498954
+rewardbench      904204         118     2733   0.710420
+bfcl             885653          93     4133   0.607117
+livecodebench    651828          72     1055   0.483596
+mathvista_mini   526201         263      874   0.260422
+afrimedqa        228194          30     6910   0.641693
+matharena        169389          97      448   0.640384
+agentdojo        140260          29     1081   0.361153
+swebench          67501         134      500   0.514701
+hle               28470          19     1792   0.314866
+mtbench           11033          34      160   5.751104
+cybench            1001           8       40   0.156994
+androidworld        465           3      116   0.876437
+
+总 Subject (模型) 数量: 909
+
+前20个 Subjects:
+                  n_responses  n_benchmarks  pass_rate
+subject_id                                            
+1b1ae706971632ad       139237             3   4.297847
+744814b5b3011642       137735             3   4.325729
+baa8cf04aa1d15d4       133441             2   3.919403
+f1a9ce853db5d1bf       132409             1   3.953260
+396841041ec65693       132112             2   3.416375
+b5306cf3206f6b66       131732             2   3.802034
+282d18caec267f9a       131522             2   3.929062
+36229ecd46682e79       131369             1   3.447049
+e6019a85dcd32e56       131259             2   3.931386
+fd4a02ff0baec669       131202             1   3.704419
+8eb1d571e7f3fc8d       131028             1   3.635178
+afa49332c42bbf2c       130844             1   2.976477
+57a83ebb5b64cbb2       130804             1   4.145847
+2b127b1e7417b685       128080             2   2.608531
+9e2b94428af23429       109669             1   3.149798
+9058f79c893a1d7e        66031             1   4.122944
+494a14f4d10a478c        45165             2   0.576831
+373b2ee1b8c4cf26        44949             2   0.440643
+ce8041ab459c3167        36331             3   0.711423
+70e3e5c181c774bc        36266             3   0.679667
+
+总 Item 数量: 103983
+
+Test Condition 分布:
+test_condition
+None                                             4143964
+skill=coarse_perception                           668678
+source=submissions                                648837
+skill=finegrained_perception (instance-level)     541032
+aspect=helpfulness                                511476
+aspect=truthfulness                               511476
+aspect=instruction_following                      511467
+aspect=honesty                                    484266
+skill=finegrained_perception (cross-instance)     326560
+skill=relation_reasoning                          308354
+skill=attribute_reasoning                         292532
+NaN                                               270386
+skill=logic_reasoning                             224078
+source=afrimedqa-v2|prompt=base                   140190
+subset=math-prm                                   134994
+subset=xstest-should-respond                       75500
+source=unknown|prompt=base                         57093
+subset=hep-python                                  49528
+subset=hep-go                                      49528
+subset=hep-cpp                                     49528
+
+Response Matrix 稀疏性:
+  总 subjects: 909
+  总 items: 103983
+  理论矩阵大小: 94,520,547
+  实际填充: 10,711,394
+  稀疏率: 88.6677%
+
+Item 难度分布 (用 1 - pass_rate 近似):
+  最简单 items (pass_rate ≈ 1.0): 70,316
+  最难 items (pass_rate < 0.05): 4,030
+  中等难度 (0.3-0.7): 12,234

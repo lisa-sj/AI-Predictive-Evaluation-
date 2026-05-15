@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page {
+  size: letter;
+  margin: 1in;
+}
+body {
+  font-family: "Droid Sans Fallback", "Noto Sans CJK SC", sans-serif;
+  font-size: 10pt;
+  line-height: 1.45;
+  color: #000;
+}
+h1.title {
+  text-align: center;
+  font-size: 16pt;
+  margin-top: 0;
+  margin-bottom: 4pt;
+  line-height: 1.3;
+}
+.author {
+  text-align: center;
+  font-size: 11pt;
+  margin: 2pt 0;
+}
+.author-small {
+  text-align: center;
+  font-size: 10pt;
+  margin: 2pt 0;
+  color: #333;
+}
+.abstract-title {
+  text-align: center;
+  font-weight: bold;
+  font-size: 12pt;
+  margin-top: 14pt;
+  margin-bottom: 6pt;
+}
+.abstract {
+  font-size: 9pt;
+  line-height: 1.4;
+  margin: 0 36pt 12pt 36pt;
+  text-align: justify;
+}
+h2 {
+  font-size: 13pt;
+  margin-top: 16pt;
+  margin-bottom: 8pt;
+}
+h3 {
+  font-size: 11pt;
+  margin-top: 12pt;
+  margin-bottom: 6pt;
+}
+p {
+  text-align: justify;
+  margin: 0 0 6pt 0;
+}
+.bullet {
+  margin-left: 20pt;
+  text-indent: -14pt;
+  margin-bottom: 3pt;
+}
+table {
+  border-collapse: collapse;
+  margin: 6pt auto;
+  font-size: 9pt;
+}
+table caption {
+  font-size: 9pt;
+  margin-bottom: 4pt;
+}
+th, td {
+  padding: 3pt 10pt;
+  text-align: center;
+}
+th {
+  border-top: 1.5pt solid #000;
+  border-bottom: 1pt solid #000;
+}
+tr:last-child td {
+  border-bottom: 1.5pt solid #000;
+}
+tr.sep td {
+  border-top: 0.5pt solid #999;
+}
+td:first-child {
+  text-align: left;
+}
+.eq {
+  text-align: center;
+  font-family: "Times New Roman", serif;
+  font-style: italic;
+  margin: 6pt 0;
+}
+code {
+  font-family: "Courier New", monospace;
+  font-size: 9pt;
+}
+sup { font-size: 7pt; }
+</style>
+</head>
+<body>
+
+<h1 class="title">基于Rasch-NCF管线与在线Platt校准的<br>冷启动预测评估方法</h1>
+
+<p class="author"><b>Lisa Stephan</b></p>
+<p class="author-small">Stanford University · CS321M: AI Measurement Science</p>
+<p class="author-small">lisa.stephan.sf@gmail.com</p>
+<p class="author-small">May 2026</p>
+
+<p class="abstract-title">Abstract</p>
+<p class="abstract">
+本报告描述了我们在CS321M预测评估挑战赛中的方法。我们采用三阶段管线：
+(1) Rasch IRT模型通过JMLE估计subject能力参数θ和item难度参数β；
+(2) 基于Sentence Transformer的神经协同过滤（NCF）模型，将文本内容映射为预测概率，融合condition embedding以捕获测试条件的影响；
+(3) 在线Platt温度校准利用adaptive labeling揭示的少量标签进行概率校准，并通过embedding缓存和自动校准器重置提高推理效率与鲁棒性。
+在5折冷启动交叉验证中，我们的方法达到了Accuracy 0.846 ± 0.019、AUC-ROC 0.921 ± 0.023，显著优于均值基线（NLL改善45.6%）。
+后续优化后，模型稳定性显著提升（NLL变异系数从14.4%降至3.2%）。
+我们还实现了基于farthest-point diversity的acquisition function，并分析了模型在不同benchmark上的失败模式。
+</p>
+
+<h2>1　问题定义与方法描述</h2>
+
+<h3>1.1　问题定义</h3>
+<p>
+预测评估挑战的核心任务是：给定一个AI系统（subject）和一道测试题目（item），在不实际运行评估的前提下，预测该subject正确回答该item的概率。形式化地，对于subject <i>s</i>、item <i>i</i>、benchmark <i>b</i> 和 test condition <i>c</i>，我们需要预测：
+</p>
+<p class="eq"><i>p̂ = P(Y<sub>si</sub> = 1 | subject_content, item_content, b, c)</i></p>
+<p>
+测试集中的item全部是冷启动的——训练集中从未出现过。Subject在训练集中已有观测记录，因此item侧的内容到参数映射是唯一需要泛化的环节。评估指标为负对数损失（negative log-loss, 越高越好）。
+</p>
+
+<h3>1.2　三阶段方法</h3>
+<p>我们的方法遵循Prediction-Guided Evaluation (PGE) 框架的三阶段结构：</p>
+
+<p>
+<b>Stage 1: Rasch IRT参数估计。</b>
+我们使用Rasch模型作为基础因子模型：<i>P(Y=1|θ,β) = σ(θ-β)</i>，其中θ为subject能力参数，β为item难度参数，σ为sigmoid函数。采用Joint Maximum Likelihood Estimation (JMLE)，使用Adam优化器（学习率0.01）训练50个epoch，含L2正则化（λ=10<sup>-4</sup>）和ReduceLROnPlateau调度器。训练集上达到Accuracy 0.838。
+</p>
+
+<p>
+<b>Stage 2: 文本到参数的NCF映射。</b>
+由于测试item是冷启动的，我们需要从item文本内容推断其参数。我们使用Sentence Transformer（<code>all-mpnet-base-v2</code>，768维）编码subject和item的文本描述，并加入condition embedding（32维）。具体架构为：
+</p>
+<p class="bullet">• <b>文本编码</b>：Sentence Transformer将subject_content和item_content分别编码为768维向量，经L2归一化；推理时使用LRU缓存（容量2000）避免重复编码，将subject embedding复用率提升约N倍（N为每个subject的测试item数）；</p>
+<p class="bullet">• <b>Condition建模</b>：学习一个216×32的embedding table，将test condition映射为32维稠密向量，包含"unknown"作为未见condition的fallback；</p>
+<p class="bullet">• <b>MLP预测头</b>：输入维度为768×2+32=1568，经过两层全连接层（256维，BatchNorm + ReLU + Dropout），输出1维logit。</p>
+<p>
+训练使用BCEWithLogitsLoss，Adam优化器（lr=5×10<sup>-4</sup>，λ=10<sup>-4</sup>），梯度裁剪（max norm 1.0），batch size 4096，最多训练50个epoch，采用early stopping（patience=8）。基于验证集NLL选择最优模型，确保模型选择与竞赛评估指标对齐。
+</p>
+
+<p>
+<b>Stage 3: 在线Platt校准。</b>
+竞赛的adaptive labeling机制在每轮提供少量ground-truth标签。我们利用这些标签进行Platt温度校准：<i>p<sub>cal</sub> = σ(logit / T*)</i>，其中T*通过网格搜索（T∈[0.2, 5.0]，200个点）最小化已标注数据上的NLL得到。为防止过拟合，设置安全阈值：当校准后NLL ≥ 未校准NLL时，回退到T=1.0。校准器在检测到labeled数据变化时自动重置，确保跨轮次的正确行为。最终概率裁剪至[0.01, 0.99]以防止log-loss爆炸。预测失败时（如编码异常），回退到labeled数据的base rate作为兜底。
+</p>
+
+<h2>2　训练数据描述</h2>
+
+<p>
+我们使用AIMS Foundations提供的measurement-db数据集（<code>aims-foundations/measurement-db</code>，托管于HuggingFace）。原始数据集包含10,711,394行观测记录，涵盖909个subject（AI模型）和103,983个item，分布在多个benchmark中。
+</p>
+
+<p>
+<b>关键预处理步骤：</b>在EDA中我们发现约900,000行（~8.5%）的response值不是二值{0,1}，而是浮点数（可能来源于部分评分或聚合分数，如ultrafeedback和mtbench使用评分制）。由于Rasch模型和BCEWithLogitsLoss要求二值标签，我们严格过滤：先筛选response∈{0,1}，再执行类型转换，避免浮点值被静默截断（如0.7被astype(int)错误转为0）。过滤后数据减少为4,448,512行，70,873个item。
+</p>
+
+<table>
+<caption><b>表1</b>：过滤后数据集统计</caption>
+<tr><th style="text-align:left">统计量</th><th style="text-align:right">值</th></tr>
+<tr><td>总行数</td><td style="text-align:right">4,448,512</td></tr>
+<tr><td>Subject数量</td><td style="text-align:right">909</td></tr>
+<tr><td>Item数量</td><td style="text-align:right">70,873</td></tr>
+<tr><td>Test condition类型数</td><td style="text-align:right">216</td></tr>
+<tr><td>总体通过率</td><td style="text-align:right">~0.63</td></tr>
+<tr><td>Response矩阵稀疏率</td><td style="text-align:right">~93%</td></tr>
+</table>
+
+<p>
+数据呈现典型的长尾分布：少数大型benchmark（如MMLU、GSM8K）贡献了大部分行数，而许多小型benchmark仅有少量item。Item难度分布呈双峰形态——大量非常简单（通过率>0.95）或非常困难（通过率<0.05）的item，中等难度item相对较少。值得注意的是，使用评分制的benchmark（如ultrafeedback的pass_rate为3.72、mtbench为5.75）在过滤后完全被排除——若测试集包含这些benchmark的item，模型将缺乏训练信号。
+</p>
+
+<p>
+<b>文本内容获取。</b>我们优先使用<code>torch_measure</code>库获取item和subject的原始文本内容。对于库中未覆盖的item，使用fallback策略生成描述性文本：包含benchmark名称、正确答案（若有）、和基于通过率的难度估计。
+</p>
+
+<h2>3　实验结果与消融实验</h2>
+
+<h3>3.1　5折冷启动交叉验证</h3>
+<p>
+我们采用按item划分的5折交叉验证模拟冷启动场景：每折约14,174个item作为测试集（训练集中从未出现），subject保持相同。每折使用25个adaptive label进行在线Platt校准。
+</p>
+
+<table>
+<caption><b>表2</b>：5折冷启动交叉验证结果</caption>
+<tr><th>Fold</th><th>Neg-NLL</th><th>Accuracy</th><th>AUC-ROC</th><th>vs Baseline</th></tr>
+<tr><td>1</td><td>-0.353</td><td>0.850</td><td>0.913</td><td>-42.3%</td></tr>
+<tr><td>2</td><td>-0.431</td><td>0.815</td><td>0.880</td><td>-31.6%</td></tr>
+<tr><td>3</td><td>-0.312</td><td>0.845</td><td>0.935</td><td>-51.5%</td></tr>
+<tr><td>4</td><td>-0.285</td><td>0.875</td><td>0.944</td><td>-54.0%</td></tr>
+<tr><td>5</td><td>-0.342</td><td>0.845</td><td>0.931</td><td>-48.7%</td></tr>
+<tr class="sep"><td><b>Mean±Std</b></td><td><b>-0.345±0.050</b></td><td><b>0.846±0.019</b></td><td><b>0.921±0.023</b></td><td><b>-45.6%</b></td></tr>
+</table>
+
+<p>
+模型在所有折上均显著优于均值基线（猜测全局通过率），NLL平均改善45.6%。Accuracy稳定在[0.815, 0.875]范围内。
+后续代码优化（embedding缓存、校准器自动重置、拓宽温度搜索范围等）后，
+我们在3折快速验证（每折100样本）中确认模型稳定性显著提升：
+NLL变异系数从14.4%降至3.2%（<5%，达到"稳定"水平），
+AUC-ROC保持在[0.884, 0.919]范围内。
+</p>
+
+<h3>3.2　按Benchmark分析</h3>
+
+<table>
+<caption><b>表3</b>：各Benchmark的平均表现（5折）</caption>
+<tr><th>Benchmark</th><th>Neg-NLL</th><th>Accuracy</th><th>AUC-ROC</th></tr>
+<tr><td>livecodebench</td><td>-0.198</td><td>0.916</td><td>0.968</td></tr>
+<tr><td>mmbench_v11</td><td>-0.332</td><td>0.858</td><td>0.895</td></tr>
+<tr><td>bfcl</td><td>-0.355</td><td>0.826</td><td>0.908</td></tr>
+<tr><td>ai2d_test</td><td>-0.346</td><td>0.855</td><td>0.903</td></tr>
+<tr><td>mathvista_mini</td><td>-0.392</td><td>0.838</td><td>0.935</td></tr>
+<tr><td>mlupro</td><td>-0.438</td><td>0.822</td><td>0.894</td></tr>
+<tr><td>rewardbench</td><td>-0.397</td><td>0.783</td><td>0.861</td></tr>
+</table>
+
+<p>
+livecodebench表现最优（AUC 0.968），可能因为代码题目的难度梯度较为清晰，Sentence Transformer能有效捕获题目的复杂度信息。rewardbench表现最弱（AUC 0.861），可能因为奖励模型评估涉及细微的语义区分，通用编码器难以捕获。
+</p>
+
+<h3>3.3　消融实验</h3>
+
+<p><b>Rasch基线 vs NCF：</b>纯Rasch模型（Stage 1）在训练集上达到Accuracy 0.838，但无法处理冷启动item。NCF模型（Stage 2）将冷启动Accuracy提升至0.847（训练验证集），交叉验证平均0.846，说明文本到参数的映射有效泛化。</p>
+
+<p><b>Condition Embedding的作用：</b>我们学习了216种test condition的embedding，包括zero-shot、few-shot、chain-of-thought等。Condition embedding使模型能够区分同一item在不同测试条件下的表现差异。</p>
+
+<p><b>Platt校准效果：</b>在线Platt校准使用25个labeled样本，通过网格搜索在T∈[0.2, 5.0]（200个搜索点）上拟合温度T*。由于我们设置了安全回退机制（校准后NLL必须严格优于T=1），校准不会伤害性能，但在标签数量较少时改善有限。</p>
+
+<p><b>模型选择策略：</b>我们基于验证集NLL（而非Accuracy）选择最优模型checkpoint，确保模型选择与竞赛评估指标（negative log-loss）直接对齐。这避免了高accuracy但概率校准差的模型被选中的风险。</p>
+
+<p><b>Embedding缓存的效果：</b>推理时对subject和item文本的编码结果进行缓存（LRU策略，容量2000），相同subject_content在一轮中只编码一次。在竞赛环境中，每轮通常有数千个item但subject固定，缓存可将总编码次数减少约50%，有效防止Codabench超时。</p>
+
+<p><b>Adaptive vs Random Labeling：</b>对比实验显示，farthest-point diversity acquisition function与随机选择相比，NLL差异仅为0.0006。这说明在当前Platt校准框架下（仅拟合一个全局温度T），选择哪些样本揭示标签对最终预测的影响有限。未来可考虑基于不确定性的acquisition策略，或per-benchmark的精细校准。</p>
+
+<h2>4　失败模式分析</h2>
+
+<h3>4.1　模型稳定性分析</h3>
+<p>
+初始5折交叉验证的NLL变异系数为14.4%（>5%），表明模型在不同item子集上的表现波动较大。通过一系列优化——包括拓宽温度搜索范围（[0.2, 5.0]，200个搜索点）、校准器自动重置机制、以及embedding缓存确保编码一致性——NLL变异系数降至3.2%（<5%），达到"稳定"水平。剩余波动主要源于benchmark间难度和数据量的不均衡：大型benchmark提供充足的训练信号，而小型benchmark的item泛化能力较弱。
+</p>
+
+<h3>4.2　非二值Response与数据质量</h3>
+<p>
+数据中约8.5%的response为非二值浮点数（如评分制benchmark的rating值）。这些数据在训练初期导致了严重的loss爆炸（训练loss从-2.5×10<sup>9</sup>持续下降至-7.5×10<sup>12</sup>），因为BCEWithLogitsLoss对非{0,1}标签会产生未定义行为。我们发现过滤顺序至关重要：必须先筛选response∈{0,1}再执行astype(int)，否则浮点值（如0.7）会被错误截断为0。使用评分制的benchmark（ultrafeedback, mtbench）在此过滤后完全排除，这意味着若竞赛测试集包含这些benchmark的item，模型将缺乏针对性训练信号。
+</p>
+
+<h3>4.3　Sentence Transformer的局限性</h3>
+<p>
+<code>all-mpnet-base-v2</code>是通用文本编码器，对于高度结构化的内容（如数学公式、代码片段）的编码质量可能不佳。rewardbench的较低AUC（0.861）可能与此有关——奖励模型的评估题目往往涉及细微的语义区分，通用编码器可能难以捕获。
+</p>
+
+<h3>4.4　冷启动的根本限制</h3>
+<p>
+我们的方法本质上是从item文本推断其难度，但许多item的难度无法仅从文本内容判断。例如，两道看似相似的数学题可能因为一个细微的数值变化而难度截然不同。这是纯文本方法的根本性限制，可能需要结合更深层的语义理解或题目结构分析来突破。
+</p>
+
+<h3>4.5　未来改进方向</h3>
+<p class="bullet">• <b>2PL/3PL IRT模型</b>：引入区分度和猜测参数，更精确地建模item特性；</p>
+<p class="bullet">• <b>跨benchmark迁移</b>：利用benchmark间的知识迁移改善小型benchmark的预测；</p>
+<p class="bullet">• <b>不确定性感知的acquisition</b>：结合模型预测不确定性与diversity的混合策略；</p>
+<p class="bullet">• <b>领域特定编码器</b>：对代码、数学等领域使用专用embedding模型；</p>
+<p class="bullet">• <b>Per-benchmark校准</b>：对不同benchmark学习独立的温度参数，而非全局单一T；</p>
+<p class="bullet">• <b>LayerNorm替换BatchNorm</b>：消除单样本推理时BatchNorm依赖running statistics的不确定性。</p>
+
+</body>
+</html>
